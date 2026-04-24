@@ -1,0 +1,1599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Semiconductor Structure Visualizer</title>
+    <style>
+        :root {
+            --bg: #0a0e1a;
+            --panel: #0f172a;
+            --panel-hover: #1e293b;
+            --accent: #38bdf8;
+            --v-electron: #fbbf24;
+            --f-electron: #22d3ee;
+            --hole: #f472b6;
+            --bond-overlap: rgba(56, 189, 248, 0.25);
+            --border: #1e293b;
+            --text-muted: #64748b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body, html { 
+            height: 100%; 
+            background: var(--bg); 
+            color: white; 
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+        }
+
+        #app {
+            display: flex;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Right Retractable Panel */
+        #right-panel {
+            width: 300px;
+            background: var(--panel);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.5);
+            transition: transform 0.3s ease;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #right-panel.retracted {
+            transform: translateX(300px);
+        }
+
+        .panel-toggle {
+            position: absolute;
+            left: -40px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-right: none;
+            padding: 15px 8px;
+            cursor: pointer;
+            border-radius: 8px 0 0 8px;
+            transition: 0.2s;
+            z-index: 101;
+        }
+
+        .panel-toggle:hover {
+            background: var(--panel-hover);
+            padding-left: 12px;
+        }
+
+        .panel-toggle svg {
+            width: 20px;
+            height: 20px;
+            fill: var(--accent);
+        }
+
+        .panel-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(56, 189, 248, 0.05);
+        }
+
+        .panel-header h3 {
+            color: var(--accent);
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+        }
+
+        .panel-header p {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .panel-content {
+            flex: 1;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+        }
+
+        .panel-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+
+        /* Element Categories */
+        .category {
+            background: rgba(30, 41, 59, 0.3);
+            border-radius: 6px;
+            padding: 10px;
+            border: 1px solid var(--border);
+        }
+
+        .category h4 {
+            color: var(--accent);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .category h4 .valency {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            font-weight: normal;
+        }
+
+        .element-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+        }
+
+        .el-card {
+            background: var(--panel);
+            padding: 8px;
+            border-radius: 4px;
+            cursor: grab;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .el-card:hover {
+            border-color: var(--accent);
+            background: var(--panel-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(56, 189, 248, 0.2);
+        }
+
+        .el-card:active {
+            cursor: grabbing;
+        }
+
+        .sym-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #000;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }
+
+        .el-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .el-info strong {
+            display: block;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Periodic Table Button */
+        .select-element-btn {
+            background: linear-gradient(135deg, var(--accent), #0ea5e9);
+            color: #000;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.85rem;
+            transition: 0.2s;
+            margin-top: 10px;
+        }
+
+        .select-element-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+        }
+
+        /* Workspace */
+        #viewport {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: var(--bg);
+            cursor: grab;
+        }
+
+        #viewport:active {
+            cursor: grabbing;
+        }
+
+        #workspace {
+            position: absolute;
+            transform-origin: 0 0;
+            pointer-events: none;
+        }
+
+        #entity-layer {
+            pointer-events: auto;
+        }
+
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 5000px;
+            height: 5000px;
+            background-image: 
+                repeating-linear-gradient(0deg, rgba(56, 189, 248, 0.03) 0px, transparent 1px, transparent 140px),
+                repeating-linear-gradient(90deg, rgba(56, 189, 248, 0.03) 0px, transparent 1px, transparent 140px);
+            pointer-events: none;
+        }
+
+        /* Atom Styling */
+        .atom-group {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            transform: translate(-50px, -50px);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .atom-group.selected .nucleus {
+            box-shadow: 0 0 0 3px var(--accent), 0 0 20px var(--accent);
+            border: 2px solid white;
+        }
+
+        .nucleus {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 42px;
+            height: 42px;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #000;
+            z-index: 12;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .valence-orbit {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 90px;
+            height: 90px;
+            transform: translate(-50%, -50%);
+            border: 1px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 50%;
+            transition: opacity 0.2s;
+        }
+
+        .valence-orbit.hidden {
+            opacity: 0;
+        }
+
+        /* Particles */
+        .particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transform: translate(-5px, -5px);
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .v-e {
+            background: var(--v-electron);
+            box-shadow: 0 0 8px var(--v-electron);
+        }
+
+        .excite-target {
+            cursor: pointer !important;
+            pointer-events: auto !important;
+            transform: translate(-5px, -5px) scale(1.4);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-5px, -5px) scale(1.4); }
+            50% { transform: translate(-5px, -5px) scale(1.6); }
+        }
+
+        .f-e {
+            background: var(--f-electron);
+            box-shadow: 0 0 15px var(--f-electron);
+            cursor: pointer;
+            z-index: 35;
+            pointer-events: auto;
+        }
+
+        .hole {
+            background: transparent;
+            border: 2.5px solid var(--hole);
+            box-shadow: 0 0 10px var(--hole);
+        }
+
+        /* Top Controls */
+        .top-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 200;
+            flex-wrap: wrap;
+            max-width: 600px;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            background: var(--panel);
+            color: white;
+            border: 1px solid var(--border);
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--panel-hover);
+            border-color: var(--accent);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .btn.active {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        .btn-danger {
+            color: #f87171;
+            border-color: #7f1d1d;
+        }
+
+        .btn-danger:hover {
+            background: #7f1d1d;
+            color: white;
+        }
+
+        /* Bottom Control Panel */
+        .bottom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 300px;
+            background: var(--panel);
+            border-top: 1px solid var(--border);
+            padding: 15px 20px;
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            gap: 25px;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+            transition: right 0.3s ease;
+        }
+
+        #right-panel.retracted ~ .bottom-controls {
+            right: 0;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-group .btn {
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .control-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            user-select: none;
+        }
+
+        .control-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--accent);
+        }
+
+        .atom-count {
+            margin-left: auto;
+            padding: 8px 15px;
+            background: rgba(56, 189, 248, 0.1);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-weight: bold;
+        }
+
+        /* Periodic Table Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--panel);
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 1200px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+            position: relative;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header h2 {
+            color: var(--accent);
+            font-size: 1.5rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: 0.2s;
+        }
+
+        .close-btn:hover {
+            background: var(--panel-hover);
+            transform: rotate(90deg);
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 12px 15px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: white;
+            font-size: 1rem;
+            margin-bottom: 20px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .periodic-table {
+            display: grid;
+            grid-template-columns: repeat(18, 1fr);
+            gap: 3px;
+            margin-bottom: 20px;
+        }
+
+        .element-cell {
+            aspect-ratio: 1;
+            background: var(--panel-hover);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+            transition: all 0.2s;
+            font-size: 0.7rem;
+        }
+
+        .element-cell:hover {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: #000;
+            transform: scale(1.1);
+            z-index: 10;
+        }
+
+        .element-cell .symbol {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .element-cell .atomic-num {
+            font-size: 0.6rem;
+            opacity: 0.7;
+        }
+
+        .element-cell.empty {
+            background: transparent;
+            border: none;
+            cursor: default;
+        }
+
+        .element-list {
+            max-height: 300px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 8px;
+        }
+
+        .list-item {
+            background: var(--panel-hover);
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .list-item:hover {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: #000;
+        }
+
+        .list-item .symbol {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        /* Info Tip */
+        .info-tip {
+            position: absolute;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(56, 189, 248, 0.95);
+            color: #000;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            z-index: 300;
+            pointer-events: none;
+            box-shadow: 0 4px 20px rgba(56, 189, 248, 0.4);
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="viewport">
+        <div id="workspace">
+            <div class="grid-overlay"></div>
+            <svg id="bond-svg" style="position:absolute; top:0; left:0; width:10000px; height:10000px; pointer-events:none;"></svg>
+            <div id="entity-layer"></div>
+        </div>
+
+        <div class="top-controls">
+            <button class="btn" id="undo-btn" onclick="undo()">↶ Undo</button>
+            <button class="btn" id="redo-btn" onclick="redo()">↷ Redo</button>
+            <button class="btn" id="duplicate-btn" onclick="duplicateSelected()">📋 Duplicate</button>
+            <button class="btn btn-danger" id="delete-btn" onclick="deleteSelected()">🗑️ Delete</button>
+            <button class="btn btn-danger" id="reset-btn" onclick="resetWorkspace()">🔄 Reset</button>
+        </div>
+
+        <div id="info-tip" class="info-tip" style="display: none;"></div>
+    </div>
+
+    <div id="right-panel">
+        <div class="panel-toggle" onclick="togglePanel()">
+            <svg viewBox="0 0 24 24">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+            </svg>
+        </div>
+
+        <div class="panel-header">
+            <h3>Element Library</h3>
+            <p>Drag elements to workspace</p>
+        </div>
+
+        <div class="panel-content">
+            <div class="category">
+                <h4>Intrinsic <span class="valency">Valency: 4</span></h4>
+                <div class="element-grid" id="intrinsic-list"></div>
+            </div>
+
+            <div class="category">
+                <h4>P-Type <span class="valency">Valency: 3</span></h4>
+                <div class="element-grid" id="ptype-list"></div>
+            </div>
+
+            <div class="category">
+                <h4>N-Type <span class="valency">Valency: 5</span></h4>
+                <div class="element-grid" id="ntype-list"></div>
+            </div>
+
+            <button class="select-element-btn" onclick="openPeriodicTable()">
+                📊 Select from Periodic Table
+            </button>
+        </div>
+    </div>
+
+    <div class="bottom-controls">
+        <div class="control-group">
+            <button class="btn" id="make-bonds-btn" onclick="toggleMakeBonds()">🔗 Make Bonds</button>
+        </div>
+        <div class="control-group">
+            <button class="btn" id="excite-btn" onclick="toggleExciteMode()">⚡ Excite Electron</button>
+        </div>
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="show-valence" checked onchange="toggleValenceShells()">
+                Show Valence Shell
+            </label>
+        </div>
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="show-bonds" onchange="toggleBonds()">
+                Show Covalent Bonds
+            </label>
+        </div>
+        <div class="atom-count" id="atom-count">No atoms</div>
+    </div>
+</div>
+
+<!-- Periodic Table Modal -->
+<div id="periodic-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Select Element from Periodic Table</h2>
+            <button class="close-btn" onclick="closePeriodicTable()">×</button>
+        </div>
+        <input type="text" class="search-box" id="element-search" placeholder="Search elements..." onkeyup="filterElements()">
+        <div id="periodic-table" class="periodic-table"></div>
+        <h3 style="color: var(--accent); margin: 20px 0 10px 0;">All Elements</h3>
+        <div id="element-list" class="element-list"></div>
+    </div>
+</div>
+
+<script>
+    const GRID = 140;
+    
+    const ELEMENTS = [
+        {sym:'Si', name:'Silicon', val:4, color:'#94a3b8', cat:'intrinsic', num:14},
+        {sym:'Ge', name:'Germanium', val:4, color:'#737373', cat:'intrinsic', num:32},
+        {sym:'B', name:'Boron', val:3, color:'#f87171', cat:'ptype', num:5},
+        {sym:'Ga', name:'Gallium', val:3, color:'#c084fc', cat:'ptype', num:31},
+        {sym:'Al', name:'Aluminum', val:3, color:'#fca5a5', cat:'ptype', num:13},
+        {sym:'P', name:'Phosphorus', val:5, color:'#4ade80', cat:'ntype', num:15},
+        {sym:'As', name:'Arsenic', val:5, color:'#86efac', cat:'ntype', num:33},
+        {sym:'Sb', name:'Antimony', val:5, color:'#2dd4bf', cat:'ntype', num:51},
+        // Additional elements for periodic table
+        {sym:'H', name:'Hydrogen', val:1, color:'#e2e8f0', cat:'other', num:1},
+        {sym:'He', name:'Helium', val:0, color:'#d4d4d4', cat:'other', num:2},
+        {sym:'C', name:'Carbon', val:4, color:'#334155', cat:'other', num:6},
+        {sym:'N', name:'Nitrogen', val:3, color:'#60a5fa', cat:'other', num:7},
+        {sym:'O', name:'Oxygen', val:2, color:'#ef4444', cat:'other', num:8},
+        {sym:'F', name:'Fluorine', val:1, color:'#fde047', cat:'other', num:9},
+        {sym:'Ne', name:'Neon', val:0, color:'#fb923c', cat:'other', num:10},
+        {sym:'Na', name:'Sodium', val:1, color:'#a78bfa', cat:'other', num:11},
+        {sym:'Mg', name:'Magnesium', val:2, color:'#4ade80', cat:'other', num:12},
+        {sym:'Cl', name:'Chlorine', val:1, color:'#34d399', cat:'other', num:17},
+        {sym:'Ar', name:'Argon', val:0, color:'#818cf8', cat:'other', num:18},
+        {sym:'K', name:'Potassium', val:1, color:'#a855f7', cat:'other', num:19},
+        {sym:'Ca', name:'Calcium', val:2, color:'#f472b6', cat:'other', num:20},
+        {sym:'Fe', name:'Iron', val:2, color:'#94a3b8', cat:'other', num:26},
+        {sym:'Cu', name:'Copper', val:2, color:'#fb923c', cat:'other', num:29},
+        {sym:'Zn', name:'Zinc', val:2, color:'#cbd5e1', cat:'other', num:30},
+        {sym:'Br', name:'Bromine', val:1, color:'#dc2626', cat:'other', num:35},
+        {sym:'Kr', name:'Krypton', val:0, color:'#4ade80', cat:'other', num:36},
+        {sym:'Ag', name:'Silver', val:1, color:'#e5e7eb', cat:'other', num:47},
+        {sym:'Sn', name:'Tin', val:4, color:'#9ca3af', cat:'other', num:50},
+        {sym:'I', name:'Iodine', val:1, color:'#7c3aed', cat:'other', num:53},
+        {sym:'Xe', name:'Xenon', val:0, color:'#06b6d4', cat:'other', num:54},
+        {sym:'Au', name:'Gold', val:1, color:'#fbbf24', cat:'other', num:79},
+        {sym:'Hg', name:'Mercury', val:2, color:'#6b7280', cat:'other', num:80},
+        {sym:'Pb', name:'Lead', val:4, color:'#52525b', cat:'other', num:82}
+    ];
+
+    let state = {
+        atoms: [],
+        freeElectrons: [],
+        history: [],
+        redoStack: [],
+        view: { x: 200, y: 200, zoom: 1 },
+        selectedIds: [],
+        draggedAtom: null,
+        draggedElectron: null,
+        isExciteMode: false,
+        makeBonds: false,
+        isPanning: false,
+        lastMouse: { x: 0, y: 0 },
+        showValenceShells: true,
+        showBonds: false
+    };
+
+    function save() {
+        state.history.push(JSON.stringify({
+            atoms: state.atoms,
+            freeElectrons: state.freeElectrons
+        }));
+        if (state.history.length > 50) state.history.shift();
+        state.redoStack = [];
+    }
+
+    function undo() {
+        if (state.history.length === 0) return;
+        const current = JSON.stringify({
+            atoms: state.atoms,
+            freeElectrons: state.freeElectrons
+        });
+        state.redoStack.push(current);
+        const prev = JSON.parse(state.history.pop());
+        state.atoms = prev.atoms;
+        state.freeElectrons = prev.freeElectrons;
+        render();
+    }
+
+    function redo() {
+        if (state.redoStack.length === 0) return;
+        const current = JSON.stringify({
+            atoms: state.atoms,
+            freeElectrons: state.freeElectrons
+        });
+        state.history.push(current);
+        const next = JSON.parse(state.redoStack.pop());
+        state.atoms = next.atoms;
+        state.freeElectrons = next.freeElectrons;
+        render();
+    }
+
+    function togglePanel() {
+        document.getElementById('right-panel').classList.toggle('retracted');
+    }
+
+    function toggleExciteMode() {
+        if (state.atoms.length === 0 || !state.makeBonds) return;
+        
+        state.isExciteMode = !state.isExciteMode;
+        document.getElementById('excite-btn').classList.toggle('active', state.isExciteMode);
+        if (state.isExciteMode) {
+            showInfo('Click on a valence electron to excite it');
+        } else {
+            hideInfo();
+        }
+        render();
+    }
+
+    function toggleMakeBonds() {
+        state.makeBonds = !state.makeBonds;
+        document.getElementById('make-bonds-btn').classList.toggle('active', state.makeBonds);
+        
+        // Automatically activate show covalent bonds when make bonds is enabled
+        if (state.makeBonds) {
+            state.showBonds = true;
+            document.getElementById('show-bonds').checked = true;
+        } else {
+            // Disable excite mode when make bonds is turned off
+            if (state.isExciteMode) {
+                state.isExciteMode = false;
+                document.getElementById('excite-btn').classList.remove('active');
+                hideInfo();
+            }
+        }
+        
+        render();
+    }
+
+    function toggleValenceShells() {
+        state.showValenceShells = document.getElementById('show-valence').checked;
+        render();
+    }
+
+    function toggleBonds() {
+        state.showBonds = document.getElementById('show-bonds').checked;
+        render();
+    }
+
+    function showInfo(text) {
+        const tip = document.getElementById('info-tip');
+        tip.textContent = text;
+        tip.style.display = 'block';
+    }
+
+    function hideInfo() {
+        document.getElementById('info-tip').style.display = 'none';
+    }
+
+    function getNeighbor(atom, dirIdx) {
+        const dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+        const d = dirs[dirIdx];
+        return state.atoms.find(a => 
+            a.x === atom.x + d[0] * GRID && 
+            a.y === atom.y + d[1] * GRID
+        );
+    }
+
+    function createParticle(x, y, className, onClick) {
+        const p = document.createElement('div');
+        p.className = `particle ${className}`;
+        p.style.left = x + 'px';
+        p.style.top = y + 'px';
+        if (onClick) p.onclick = onClick;
+        document.getElementById('entity-layer').appendChild(p);
+        return p;
+    }
+
+    function drawEclipse(x1, y1, x2, y2, svg) {
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+        
+        const ell = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+        ell.setAttribute("cx", midX);
+        ell.setAttribute("cy", midY);
+        ell.setAttribute("rx", GRID / 1.6);
+        ell.setAttribute("ry", 35);
+        ell.setAttribute("fill", "var(--bond-overlap)");
+        ell.setAttribute("stroke", "rgba(56, 189, 248, 0.4)");
+        ell.setAttribute("stroke-width", "1");
+        ell.setAttribute("transform", `rotate(${angle}, ${midX}, ${midY})`);
+        svg.appendChild(ell);
+    }
+
+    function render() {
+        const layer = document.getElementById('entity-layer');
+        const svg = document.getElementById('bond-svg');
+        layer.innerHTML = '';
+        svg.innerHTML = '';
+        
+        // Update atom count
+        updateAtomCount();
+        
+        state.atoms.forEach(atom => {
+            const group = document.createElement('div');
+            group.className = 'atom-group' + (state.selectedIds.includes(atom.id) ? ' selected' : '');
+            group.style.left = atom.x + 'px';
+            group.style.top = atom.y + 'px';
+            
+            const orbit = document.createElement('div');
+            orbit.className = 'valence-orbit' + (!state.showValenceShells ? ' hidden' : '');
+            group.appendChild(orbit);
+            
+            const nucleus = document.createElement('div');
+            nucleus.className = 'nucleus';
+            const el = ELEMENTS.find(e => e.sym === atom.sym);
+            nucleus.style.background = el?.color || '#fff';
+            nucleus.textContent = atom.sym;
+            
+            nucleus.onmousedown = (e) => {
+                if (e.button === 0) {
+                    if (e.ctrlKey || e.metaKey) {
+                        if (state.selectedIds.includes(atom.id)) {
+                            state.selectedIds = state.selectedIds.filter(id => id !== atom.id);
+                        } else {
+                            state.selectedIds.push(atom.id);
+                        }
+                    } else {
+                        state.selectedIds = [atom.id];
+                        state.draggedAtom = atom;
+                    }
+                    render();
+                } else if (e.button === 2) {
+                    swapAtom(atom);
+                }
+                e.stopPropagation();
+            };
+            
+            nucleus.oncontextmenu = (e) => e.preventDefault();
+            group.appendChild(nucleus);
+            layer.appendChild(group);
+
+            // Count neighbors for this atom
+            const neighbors = [[0, -1], [1, 0], [0, 1], [-1, 0]].map((d, idx) => ({
+                dir: d,
+                index: idx,
+                neighbor: getNeighbor(atom, idx)
+            }));
+            const neighborCount = neighbors.filter(n => n.neighbor).length;
+            
+            // For P-type atoms with 4 neighbors, identify positions with electrons and hole
+            let pTypeElectronPositions = [];
+            let pTypeHolePosition = -1;
+            if (atom.valence === 3 && state.makeBonds) {
+                let bonded = 0;
+                for (let j = 0; j < 4; j++) {
+                    if (neighbors[j].neighbor) {
+                        bonded++;
+                        if (bonded <= 3) {
+                            // First 3 neighbors get electrons
+                            pTypeElectronPositions.push(j);
+                        } else if (bonded === 4) {
+                            // 4th neighbor gets the hole
+                            pTypeHolePosition = j;
+                        }
+                    }
+                }
+            }
+
+            const dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+            dirs.forEach((d, i) => {
+                const nx = atom.x + d[0] * GRID;
+                const ny = atom.y + d[1] * GRID;
+                const neighbor = getNeighbor(atom, i);
+                const px = atom.x + d[0] * 42;
+                const py = atom.y + d[1] * 42;
+
+                // Draw bonds - show ALL bonds including P-type with hole
+                if (neighbor && atom.id < neighbor.id && state.showBonds && state.makeBonds) {
+                    drawEclipse(atom.x, atom.y, nx, ny, svg);
+                }
+
+                // Show valence electrons, holes, and free electrons
+                if (state.showValenceShells) {
+                    // When bonds are made, show proper bonding behavior
+                    if (state.makeBonds) {
+                        if (atom.recombinedMap && atom.recombinedMap[i]) {
+                            // Show electron at recombined position (including P-type hole that was filled)
+                            createParticle(px, py, 'v-e');
+                        } else if (atom.excitedMap && atom.excitedMap[i]) {
+                            const hole = createParticle(px, py, 'hole');
+                            hole.dataset.atomId = atom.id;
+                            hole.dataset.position = i;
+                        } else {
+                            // For P-type with neighbors
+                            if (atom.valence === 3 && neighborCount > 0) {
+                                // Show electrons at first 3 bonding positions
+                                if (pTypeElectronPositions.includes(i)) {
+                                    const veClass = `v-e ${state.isExciteMode ? 'excite-target' : ''}`;
+                                    createParticle(px, py, veClass, 
+                                        state.isExciteMode ? () => exciteElectron(atom, i, px, py) : null
+                                    );
+                                }
+                                // Show hole at 4th bonding position
+                                else if (i === pTypeHolePosition) {
+                                    const hole = createParticle(px, py, 'hole');
+                                    hole.dataset.atomId = atom.id;
+                                    hole.dataset.position = i;
+                                }
+                            }
+                            // For N-type (valency 5): show 4 bonding electrons when bonds are made
+                            else if (atom.valence === 5 && i < 4) {
+                                const veClass = `v-e ${state.isExciteMode ? 'excite-target' : ''}`;
+                                createParticle(px, py, veClass, 
+                                    state.isExciteMode ? () => exciteElectron(atom, i, px, py) : null
+                                );
+                            }
+                            // For other atoms (Si, Ge)
+                            else if (atom.valence !== 3 && atom.valence !== 5 && i < atom.valence && i < 4) {
+                                const veClass = `v-e ${state.isExciteMode ? 'excite-target' : ''}`;
+                                createParticle(px, py, veClass, 
+                                    state.isExciteMode ? () => exciteElectron(atom, i, px, py) : null
+                                );
+                            }
+                        }
+                    } else {
+                        // When bonds are not made, show all valence electrons at standard positions
+                        if (i < atom.valence && i < 4) {
+                            const veClass = `v-e ${state.isExciteMode ? 'excite-target' : ''}`;
+                            createParticle(px, py, veClass, 
+                                state.isExciteMode ? () => exciteElectron(atom, i, px, py) : null
+                            );
+                        }
+                    }
+                } else {
+                    // When valence shell is hidden, always show holes and free electrons
+                    if (state.makeBonds) {
+                        if (atom.excitedMap && atom.excitedMap[i]) {
+                            const hole = createParticle(px, py, 'hole');
+                            hole.dataset.atomId = atom.id;
+                            hole.dataset.position = i;
+                        } else if (atom.valence === 3 && i === pTypeHolePosition && !(atom.recombinedMap && atom.recombinedMap[i])) {
+                            // P-type hole: ONLY ONE hole at the 4th neighbor position (unless recombined)
+                            const hole = createParticle(px, py, 'hole');
+                            hole.dataset.atomId = atom.id;
+                            hole.dataset.position = i;
+                        }
+                    }
+                }
+            });
+
+            // For N-type (valency 5): handle 5th electron
+            if (atom.valence === 5) {
+                if (state.showValenceShells) {
+                    if (!state.makeBonds) {
+                        // Without bonds: show 5th valence electron at diagonal position
+                        const px5 = atom.x + 30;
+                        const py5 = atom.y - 30;
+                        const veClass = `v-e ${state.isExciteMode ? 'excite-target' : ''}`;
+                        createParticle(px5, py5, veClass, 
+                            state.isExciteMode ? () => exciteElectron(atom, 4, px5, py5) : null
+                        );
+                    } else if (state.makeBonds && neighborCount === 4 && (!atom.excitedMap || !atom.excitedMap['f'])) {
+                        // With 4 bonds: 5th electron becomes FREE ELECTRON
+                        const isDragging = state.draggedElectron && 
+                                          state.draggedElectron.isAtomFree && 
+                                          state.draggedElectron.sourceAtom.id === atom.id;
+                        
+                        if (!isDragging) {
+                            const fe = createParticle(atom.x + 30, atom.y - 30, 'f-e');
+                            fe.dataset.atomId = atom.id;
+                            fe.dataset.type = 'atom-free';
+                            fe.onmousedown = (e) => {
+                                e.stopPropagation();
+                                state.draggedElectron = { 
+                                    electron: { x: atom.x + 30, y: atom.y - 30 }, 
+                                    idx: -1,
+                                    isAtomFree: true,
+                                    sourceAtom: atom
+                                };
+                            };
+                        }
+                    }
+                } else {
+                    // Valence shell hidden: always show free electron if bonds are made and 4 neighbors
+                    if (state.makeBonds && neighborCount === 4 && (!atom.excitedMap || !atom.excitedMap['f'])) {
+                        const isDragging = state.draggedElectron && 
+                                          state.draggedElectron.isAtomFree && 
+                                          state.draggedElectron.sourceAtom.id === atom.id;
+                        
+                        if (!isDragging) {
+                            const fe = createParticle(atom.x + 30, atom.y - 30, 'f-e');
+                            fe.dataset.atomId = atom.id;
+                            fe.dataset.type = 'atom-free';
+                            fe.onmousedown = (e) => {
+                                e.stopPropagation();
+                                state.draggedElectron = { 
+                                    electron: { x: atom.x + 30, y: atom.y - 30 }, 
+                                    idx: -1,
+                                    isAtomFree: true,
+                                    sourceAtom: atom
+                                };
+                            };
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Render free electrons
+        state.freeElectrons.forEach((electron, idx) => {
+            const el = createParticle(electron.x, electron.y, 'f-e');
+            el.dataset.electronIdx = idx;
+            el.onmousedown = (e) => {
+                e.stopPropagation();
+                state.draggedElectron = { electron, idx };
+            };
+        });
+        
+        // Render dragged N-type atom free electron if being dragged
+        if (state.draggedElectron && state.draggedElectron.isAtomFree) {
+            createParticle(state.draggedElectron.electron.x, state.draggedElectron.electron.y, 'f-e');
+        }
+    }
+
+    function swapAtom(atom) {
+        const el = ELEMENTS.find(e => e.sym === atom.sym);
+        const catElements = ELEMENTS.filter(e => e.cat === el.cat);
+        if (catElements.length <= 1) return;
+        
+        const currentIdx = catElements.findIndex(e => e.sym === atom.sym);
+        const nextIdx = (currentIdx + 1) % catElements.length;
+        const nextEl = catElements[nextIdx];
+        
+        save();
+        atom.sym = nextEl.sym;
+        atom.valence = nextEl.val;
+        atom.excitedMap = {};
+        atom.recombinedMap = {};
+        render();
+    }
+
+    function exciteElectron(atom, i, px, py) {
+        save();
+        if (!atom.excitedMap) atom.excitedMap = {};
+        atom.excitedMap[i] = true;
+        state.freeElectrons.push({ x: px + 25, y: py - 25 });
+        state.isExciteMode = false;
+        document.getElementById('excite-btn').classList.remove('active');
+        hideInfo();
+        render();
+    }
+
+    function duplicateSelected() {
+        if (state.selectedIds.length === 0) return;
+        save();
+        
+        const newAtoms = [];
+        state.selectedIds.forEach(id => {
+            const atom = state.atoms.find(a => a.id === id);
+            if (atom) {
+                const newAtom = {
+                    id: Date.now() + Math.random(),
+                    sym: atom.sym,
+                    valence: atom.valence,
+                    x: atom.x + GRID,
+                    y: atom.y,
+                    excitedMap: {},
+                    recombinedMap: {}
+                };
+                // Check for overlap
+                const hasOverlap = state.atoms.some(a => a.x === newAtom.x && a.y === newAtom.y);
+                if (!hasOverlap) {
+                    newAtoms.push(newAtom);
+                }
+            }
+        });
+        
+        state.atoms.push(...newAtoms);
+        render();
+    }
+
+    function deleteSelected() {
+        if (state.selectedIds.length === 0) return;
+        save();
+        state.atoms = state.atoms.filter(a => !state.selectedIds.includes(a.id));
+        state.selectedIds = [];
+        render();
+    }
+
+    function resetWorkspace() {
+        if (confirm('Are you sure you want to clear all atoms?')) {
+            save();
+            state.atoms = [];
+            state.freeElectrons = [];
+            state.selectedIds = [];
+            render();
+        }
+    }
+
+    function updateAtomCount() {
+        const counts = {};
+        state.atoms.forEach(atom => {
+            counts[atom.sym] = (counts[atom.sym] || 0) + 1;
+        });
+        
+        const total = state.atoms.length;
+        if (total === 0) {
+            document.getElementById('atom-count').textContent = 'No atoms';
+        } else {
+            const countStr = Object.entries(counts)
+                .map(([sym, count]) => `${sym}: ${count}`)
+                .join(', ');
+            document.getElementById('atom-count').textContent = 
+                `${total} atom${total > 1 ? 's' : ''} (${countStr})`;
+        }
+        
+        // Update button states
+        updateButtonStates();
+    }
+
+    function updateButtonStates() {
+        const hasAtoms = state.atoms.length > 0;
+        const hasSelection = state.selectedIds.length > 0;
+        
+        // Disable buttons when no atoms
+        document.getElementById('make-bonds-btn').disabled = !hasAtoms;
+        document.getElementById('excite-btn').disabled = !hasAtoms || !state.makeBonds;
+        document.getElementById('duplicate-btn').disabled = !hasSelection;
+        document.getElementById('delete-btn').disabled = !hasSelection;
+        document.getElementById('reset-btn').disabled = !hasAtoms;
+        document.getElementById('undo-btn').disabled = state.history.length === 0;
+        document.getElementById('redo-btn').disabled = state.redoStack.length === 0;
+        
+        // Add disabled styling
+        const buttons = ['make-bonds-btn', 'excite-btn', 'duplicate-btn', 'delete-btn', 'reset-btn', 'undo-btn', 'redo-btn'];
+        buttons.forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn.disabled) {
+                btn.style.opacity = '0.4';
+                btn.style.cursor = 'not-allowed';
+            } else {
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            }
+        });
+    }
+
+    const viewport = document.getElementById('viewport');
+    const workspace = document.getElementById('workspace');
+
+    viewport.onmousedown = (e) => {
+        if (e.target === viewport || e.target.classList.contains('grid-overlay')) {
+            state.isPanning = true;
+            state.lastMouse = { x: e.clientX, y: e.clientY };
+            if (!e.ctrlKey && !e.metaKey) {
+                state.selectedIds = [];
+                render();
+            }
+        }
+    };
+
+    window.onmousemove = (e) => {
+        if (state.isPanning) {
+            state.view.x += e.clientX - state.lastMouse.x;
+            state.view.y += e.clientY - state.lastMouse.y;
+            state.lastMouse = { x: e.clientX, y: e.clientY };
+            updateTransform();
+        }
+        
+        if (state.draggedAtom) {
+            const rect = viewport.getBoundingClientRect();
+            const newX = Math.round(((e.clientX - rect.left - state.view.x) / state.view.zoom) / GRID) * GRID;
+            const newY = Math.round(((e.clientY - rect.top - state.view.y) / state.view.zoom) / GRID) * GRID;
+            
+            // Check for overlap
+            const hasOverlap = state.atoms.some(a => 
+                a.id !== state.draggedAtom.id && a.x === newX && a.y === newY
+            );
+            
+            if (!hasOverlap) {
+                state.draggedAtom.x = newX;
+                state.draggedAtom.y = newY;
+            }
+            render();
+        }
+        
+        if (state.draggedElectron) {
+            const rect = viewport.getBoundingClientRect();
+            const newX = (e.clientX - rect.left - state.view.x) / state.view.zoom;
+            const newY = (e.clientY - rect.top - state.view.y) / state.view.zoom;
+            
+            if (state.draggedElectron.isAtomFree) {
+                // Update position for rendering
+                state.draggedElectron.electron.x = newX;
+                state.draggedElectron.electron.y = newY;
+            } else {
+                state.draggedElectron.electron.x = newX;
+                state.draggedElectron.electron.y = newY;
+            }
+            render();
+        }
+    };
+
+    window.onmouseup = (e) => {
+        state.isPanning = false;
+        state.draggedAtom = null;
+        
+        if (state.draggedElectron) {
+            const rect = viewport.getBoundingClientRect();
+            const mx = (e.clientX - rect.left - state.view.x) / state.view.zoom;
+            const my = (e.clientY - rect.top - state.view.y) / state.view.zoom;
+            
+            let recombined = false;
+            
+            // Check for recombination with holes
+            state.atoms.forEach(atom => {
+                const neighbors = [[0, -1], [1, 0], [0, 1], [-1, 0]].map((d, idx) => ({
+                    neighbor: state.atoms.find(a => a.x === atom.x + d[0] * GRID && a.y === atom.y + d[1] * GRID)
+                }));
+                const neighborCount = neighbors.filter(n => n.neighbor).length;
+                
+                // Determine P-type hole position
+                let pTypeHolePosition = -1;
+                if (atom.valence === 3 && state.makeBonds) {
+                    let bonded = 0;
+                    for (let j = 0; j < 4; j++) {
+                        if (neighbors[j].neighbor) {
+                            bonded++;
+                            if (bonded === 4) {
+                                pTypeHolePosition = j;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                [[0, -1], [1, 0], [0, 1], [-1, 0]].forEach((d, i) => {
+                    const hx = atom.x + d[0] * 42;
+                    const hy = atom.y + d[1] * 42;
+                    const dist = Math.hypot(mx - hx, my - hy);
+                    
+                    if (dist < 30) {
+                        // Check if this is a valid hole position
+                        const isPtypeHole = (atom.valence === 3 && i === pTypeHolePosition);
+                        
+                        if ((atom.excitedMap && atom.excitedMap[i]) || isPtypeHole) {
+                            save();
+                            if (atom.excitedMap && atom.excitedMap[i]) {
+                                delete atom.excitedMap[i];
+                            } else if (isPtypeHole) {
+                                if (!atom.recombinedMap) atom.recombinedMap = {};
+                                atom.recombinedMap[i] = true;
+                            }
+                            
+                            // Remove the electron
+                            if (state.draggedElectron.isAtomFree) {
+                                // Mark the source N-type atom's free electron as used
+                                if (!state.draggedElectron.sourceAtom.excitedMap) {
+                                    state.draggedElectron.sourceAtom.excitedMap = {};
+                                }
+                                state.draggedElectron.sourceAtom.excitedMap['f'] = true;
+                            } else if (state.draggedElectron.idx >= 0) {
+                                state.freeElectrons.splice(state.draggedElectron.idx, 1);
+                            }
+                            recombined = true;
+                        }
+                    }
+                });
+            });
+            
+            state.draggedElectron = null;
+            render();
+        }
+    };
+
+    viewport.onwheel = (e) => {
+        e.preventDefault();
+        const oldZoom = state.view.zoom;
+        state.view.zoom = Math.min(Math.max(0.3, state.view.zoom * (e.deltaY > 0 ? 0.9 : 1.1)), 3);
+        
+        const rect = viewport.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        state.view.x = mouseX - (mouseX - state.view.x) * (state.view.zoom / oldZoom);
+        state.view.y = mouseY - (mouseY - state.view.y) * (state.view.zoom / oldZoom);
+        updateTransform();
+    };
+
+    function updateTransform() {
+        workspace.style.transform = `translate(${state.view.x}px, ${state.view.y}px) scale(${state.view.zoom})`;
+    }
+
+    viewport.ondragover = (e) => e.preventDefault();
+    viewport.ondrop = (e) => {
+        e.preventDefault();
+        const sym = e.dataTransfer.getData('sym');
+        const val = parseInt(e.dataTransfer.getData('val'));
+        
+        const rect = viewport.getBoundingClientRect();
+        const x = (e.clientX - rect.left - state.view.x) / state.view.zoom;
+        const y = (e.clientY - rect.top - state.view.y) / state.view.zoom;
+        
+        const gridX = Math.round(x / GRID) * GRID;
+        const gridY = Math.round(y / GRID) * GRID;
+        
+        // Check for overlap
+        const hasOverlap = state.atoms.some(a => a.x === gridX && a.y === gridY);
+        if (hasOverlap) return;
+        
+        save();
+        state.atoms.push({
+            id: Date.now() + Math.random(),
+            sym,
+            valence: val,
+            x: gridX,
+            y: gridY,
+            excitedMap: {},
+            recombinedMap: {}
+        });
+        render();
+    };
+
+    window.onkeydown = (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'z') {
+                e.preventDefault();
+                undo();
+            } else if (e.key === 'y') {
+                e.preventDefault();
+                redo();
+            } else if (e.key === 'a') {
+                e.preventDefault();
+                state.selectedIds = state.atoms.map(a => a.id);
+                render();
+            } else if (e.key === 'd') {
+                e.preventDefault();
+                duplicateSelected();
+            }
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (state.selectedIds.length > 0) {
+                e.preventDefault();
+                deleteSelected();
+            }
+        } else if (e.key === 'Escape') {
+            state.selectedIds = [];
+            state.isExciteMode = false;
+            document.getElementById('excite-btn').classList.remove('active');
+            hideInfo();
+            render();
+        }
+    };
+
+    // Periodic Table Functions
+    function openPeriodicTable() {
+        document.getElementById('periodic-modal').classList.add('show');
+        buildPeriodicTable();
+        buildElementList();
+    }
+
+    function closePeriodicTable() {
+        document.getElementById('periodic-modal').classList.remove('show');
+    }
+
+    function buildPeriodicTable() {
+        const table = document.getElementById('periodic-table');
+        table.innerHTML = '';
+        
+        // Simplified periodic table layout (first 3 rows)
+        const layout = [
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+            [3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 5, 6, 7, 8, 9, 10, 17, 18],
+            [11, 12, 0, 0, 0, 0, 0, 0, 0, 0, 13, 14, 15, 33, 51, 53, 35, 36]
+        ];
+        
+        layout.forEach(row => {
+            row.forEach(num => {
+                if (num === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'element-cell empty';
+                    table.appendChild(empty);
+                } else {
+                    const el = ELEMENTS.find(e => e.num === num);
+                    if (el) {
+                        const cell = document.createElement('div');
+                        cell.className = 'element-cell';
+                        cell.innerHTML = `
+                            <div class="atomic-num">${el.num}</div>
+                            <div class="symbol">${el.sym}</div>
+                        `;
+                        cell.onclick = () => selectElement(el);
+                        table.appendChild(cell);
+                    } else {
+                        const empty = document.createElement('div');
+                        empty.className = 'element-cell empty';
+                        table.appendChild(empty);
+                    }
+                }
+            });
+        });
+    }
+
+    function buildElementList() {
+        const list = document.getElementById('element-list');
+        list.innerHTML = '';
+        
+        ELEMENTS.forEach(el => {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.innerHTML = `
+                <div class="symbol">${el.sym}</div>
+                <div>
+                    <div><strong>${el.name}</strong></div>
+                    <small>Valency: ${el.val}</small>
+                </div>
+            `;
+            item.onclick = () => selectElement(el);
+            list.appendChild(item);
+        });
+    }
+
+    function selectElement(el) {
+        // Create draggable element in workspace
+        closePeriodicTable();
+        showInfo(`Selected ${el.name}. Drag from the element library to add to workspace.`);
+        setTimeout(hideInfo, 3000);
+    }
+
+    function filterElements() {
+        const search = document.getElementById('element-search').value.toLowerCase();
+        const items = document.querySelectorAll('.list-item');
+        
+        items.forEach(item => {
+            const text = item.textContent.toLowerCase();
+            item.style.display = text.includes(search) ? '' : 'none';
+        });
+    }
+
+    // Initialize
+    function init() {
+        // Populate element cards
+        ELEMENTS.forEach(el => {
+            if (el.cat === 'other') return;
+            
+            const card = document.createElement('div');
+            card.className = 'el-card';
+            card.draggable = true;
+            card.ondragstart = (e) => {
+                e.dataTransfer.setData('sym', el.sym);
+                e.dataTransfer.setData('val', el.val);
+            };
+            card.innerHTML = `
+                <div class="sym-icon" style="background: ${el.color}">${el.sym}</div>
+                <div class="el-info"><strong>${el.name}</strong></div>
+            `;
+            
+            const list = document.getElementById(el.cat + '-list');
+            if (list) list.appendChild(card);
+        });
+        
+        updateTransform();
+        save();
+        render();
+        updateButtonStates();
+    }
+
+    // Close modal on escape
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.getElementById('periodic-modal').classList.contains('show')) {
+            closePeriodicTable();
+        }
+    });
+
+    init();
+</script>
+
+</body>
+</html>
